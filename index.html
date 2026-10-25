@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Hüpf-Abenteuer – 2D Plattformer</title>
+  <meta name="description" content="Ein kleines 2D-Jump-and-Run im Browser.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="wrap">
+    <canvas id="game" width="960" height="540" aria-label="Spielfeld"></canvas>
+    <div id="touch" aria-hidden="true">
+      <div class="pad left">
+        <button data-key="left">◀</button>
+        <button data-key="right">▶</button>
+      </div>
+      <div class="pad right">
+        <button data-key="jump" class="jump">⤒</button>
+      </div>
+    </div>
+  </div>
+  <script src="levels.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
