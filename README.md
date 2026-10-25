@@ -20,6 +20,10 @@ Gehostet über **GitHub Pages**.
 Halte die Sprungtaste länger für höhere Sprünge. Springe auf Gegner, um sie zu besiegen,
 sammle Münzen (alle 50 Münzen = 1 Extraleben) und erreiche die Fahne am Levelende.
 
+Berührst du einen Gegner oder Stacheln, verlierst du ein Leben, wirst kurz zurückgestoßen und blinkst
+1,5 Sekunden lang (unverwundbar). Fällst du in einen Abgrund, kostet das ein Leben und du startest
+auf dem letzten sicheren Boden neu. Erst bei 0 Leben ist Game Over.
+
 ## Features
 
 - 3 Level mit eigenem Look: *Grüne Wiesen*, *Hügelland*, *Nachtburg*
