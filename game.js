@@ -20,6 +20,10 @@
   const STOMP_VELOCITY = 520;
   const ENEMY_SPEED = 60;
   const MOVER_SPEED = 70;
+  const INVULN_TIME = 1.5; // Unverwundbarkeit nach einem Treffer
+  const HURT_LOCK = 0.3; // so lange wird die Steuerung nach einem Treffer ignoriert
+  const KNOCKBACK_X = 300;
+  const KNOCKBACK_Y = 450;
   const STEP = 1 / 120;
 
   const canvas = document.getElementById('game');
@@ -69,6 +73,7 @@
     stomp: () => tone(400, 90, 0.18, 'triangle', 0.15),
     spring: () => tone(200, 900, 0.3, 'sine', 0.12),
     die: () => tone(500, 60, 0.7, 'sawtooth', 0.08),
+    hurt: () => tone(300, 120, 0.25, 'square', 0.1),
     clear: () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, f, 0.18, 'square', 0.07), i * 120)),
     life: () => [660, 880, 1100].forEach((f, i) => setTimeout(() => tone(f, f, 0.1, 'triangle', 0.1), i * 80)),
   };
@@ -198,6 +203,7 @@
       x: level.start.x, y: level.start.y, w: 22, h: 30,
       vx: 0, vy: 0, onGround: false, ground: null,
       facing: 1, coyote: 0, squash: 1, runAnim: 0,
+      invuln: 0, hurt: 0, safeX: level.start.x, safeY: level.start.y,
     };
     particles = [];
     game.levelTime = 0;
@@ -315,6 +321,36 @@
     sfx.die();
   }
 
+  // Ein Leben abziehen, der Spieler bleibt aber im Level
+  function hurtPlayer(fromX) {
+    const p = player;
+    if (p.invuln > 0 || game.state !== 'playing') return;
+    game.lives--;
+    if (game.lives <= 0) { killPlayer(); return; }
+    p.invuln = INVULN_TIME;
+    p.hurt = HURT_LOCK;
+    const away = p.x + p.w / 2 < fromX ? -1 : 1;
+    p.vx = away * KNOCKBACK_X;
+    p.vy = -KNOCKBACK_Y;
+    p.squash = 0.8;
+    burst(p.x + p.w / 2, p.y + p.h / 2, '#ff5d5d', 10, 180);
+    sfx.hurt();
+  }
+
+  // In einen Abgrund gefallen: Leben weg und zurück auf den letzten sicheren Boden
+  function fellIntoPit() {
+    const p = player;
+    game.lives--;
+    if (game.lives <= 0) { killPlayer(); return; }
+    p.x = p.safeX;
+    p.y = p.safeY;
+    p.vx = 0;
+    p.vy = 0;
+    p.invuln = INVULN_TIME;
+    p.hurt = 0;
+    sfx.hurt();
+  }
+
   function updatePlaying(dt) {
     game.levelTime += dt;
 
@@ -329,13 +365,15 @@
 
     // Spieler
     const p = player;
-    const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    p.invuln = Math.max(0, p.invuln - dt);
+    p.hurt = Math.max(0, p.hurt - dt);
+    const dir = p.hurt > 0 ? 0 : (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const accel = p.onGround ? GROUND_ACCEL : AIR_ACCEL;
     if (dir !== 0) {
       p.vx += dir * accel * dt;
       p.vx = Math.max(-RUN_SPEED, Math.min(RUN_SPEED, p.vx));
       p.facing = dir;
-    } else {
+    } else if (p.hurt <= 0) {
       const f = (p.onGround ? FRICTION : AIR_ACCEL * 0.5) * dt;
       p.vx = Math.abs(p.vx) <= f ? 0 : p.vx - Math.sign(p.vx) * f;
     }
@@ -368,7 +406,9 @@
     p.squash += (1 - p.squash) * Math.min(1, dt * 12);
     p.runAnim += Math.abs(p.vx) * dt * 0.05;
 
-    if (p.y > level.pixelHeight + 64) { killPlayer(); return; }
+    if (p.y > level.pixelHeight + 64) { fellIntoPit(); return; }
+    // Letzte sichere Position merken (fester Boden, keine bewegliche Plattform)
+    if (p.onGround && !p.ground) { p.safeX = p.x; p.safeY = p.y; }
 
     // Stacheln
     const hitbox = { x: p.x + 3, y: p.y + 4, w: p.w - 6, h: p.h - 4 };
@@ -377,10 +417,12 @@
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
         if (tileAt(c, r) === '^' && overlap(hitbox, { x: c * T + 4, y: r * T + 14, w: T - 8, h: T - 14 })) {
-          killPlayer(); return;
+          hurtPlayer(c * T + T / 2);
         }
       }
     }
+
+    if (game.state !== 'playing') return;
 
     // Münzen
     for (const coin of level.coins) {
@@ -431,11 +473,12 @@
           burst(e.x + e.w / 2, e.y + e.h / 2, '#7be06a', 12, 200);
           sfx.stomp();
         } else {
-          killPlayer();
-          return;
+          hurtPlayer(e.x + e.w / 2);
         }
       }
     }
+
+    if (game.state !== 'playing') return;
 
     // Ziel
     const f = level.flag;
@@ -501,14 +544,8 @@
         updateParticles(dt);
         game.timer -= dt;
         if (game.timer <= 0) {
-          game.lives--;
-          if (game.lives <= 0) {
-            finishRun();
-            game.state = 'gameover';
-          } else {
-            startLevel(game.levelIndex);
-            updateCamera(0, true);
-          }
+          finishRun();
+          game.state = 'gameover';
         }
         break;
       case 'clear':
@@ -823,6 +860,8 @@
     const x = cx - w / 2;
     const y = by - h;
     const dying = game.state === 'dying';
+    // Blinken während der Unverwundbarkeit
+    if (p.invuln > 0 && Math.floor(p.invuln * 10) % 2 === 0) return;
 
     // Füße
     const moving = p.onGround && Math.abs(p.vx) > 20;
